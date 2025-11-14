@@ -141,8 +141,8 @@ def save_binary_plot(combo: Sequence[str], fractions: List[float], enthalpies: L
     plt.figure(figsize=(6, 4))
     plt.plot([f * 100 for f in fractions], enthalpies, lw=1.5)
     plt.xlabel(f"{combo[0]} atomic %")
-    plt.ylabel("ΔH_mix (kJ/mol)")
-    plt.title(f"Binary ΔH_mix: {combo[0]}-{combo[1]}")
+    plt.ylabel(r"$\Delta H_{\mathrm{mix}}$ (kJ/mol)")
+    plt.title(rf"Binary $\Delta H_{{\mathrm{mix}}}$: {combo[0]}-{combo[1]}")
     plt.grid(True, linestyle="--", alpha=0.3)
     plt.tight_layout()
     plt.savefig(path, dpi=200)
@@ -160,7 +160,7 @@ def save_ternary_plot(
     plt.figure(figsize=(6, 5.5))
     triang = mtri.Triangulation(xs, ys)
     mesh = plt.tripcolor(triang, values, shading="gouraud", cmap="viridis")
-    plt.colorbar(mesh, label="ΔH_mix (kJ/mol)")
+    plt.colorbar(mesh, label=r"$\Delta H_{\mathrm{mix}}$ (kJ/mol)")
     combo_label = "-".join(combo)
     plt.title(r"Ternary $\Delta H_{\mathrm{mix}}$: " + combo_label)
     # annotate corners
@@ -330,9 +330,14 @@ def handle_custom_plot(calculator, tables, output_dir: Path) -> None:
             )
         )
         fig.update_layout(
-            title=dict(text=f"Binary ΔH_mix: {'-'.join(combo)}", font=PLOTLY_ELEMENT_FONT),
+            title=dict(
+                text=r"Binary $\Delta H_{\mathrm{mix}}$: " + "-".join(combo),
+                font=PLOTLY_ELEMENT_FONT,
+            ),
             xaxis=dict(title=dict(text=f"{combo[0]} atomic %", font=PLOTLY_ELEMENT_FONT)),
-            yaxis=dict(title=dict(text="ΔH_mix (kJ/mol)", font=PLOTLY_ELEMENT_FONT)),
+            yaxis=dict(
+                title=dict(text=r"$\Delta H_{\mathrm{mix}}$ (kJ/mol)", font=PLOTLY_ELEMENT_FONT)
+            ),
             template="plotly_white",
         )
         preview_and_maybe_save(fig, custom_dir / f"{combo[0]}-{combo[1]}.png")
@@ -360,7 +365,7 @@ def handle_custom_plot(calculator, tables, output_dir: Path) -> None:
                     size=6,
                     color=enthalpies,
                     colorscale="Viridis",
-                    colorbar=dict(title="ΔH_mix (kJ/mol)"),
+                    colorbar=dict(title=r"$\Delta H_{\mathrm{mix}}$ (kJ/mol)"),
                 ),
                 hovertemplate=(
                     f"{combo[0]}=%{{a:.2f}}%<br>"
