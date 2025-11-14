@@ -1,25 +1,53 @@
 #!/usr/bin/env python3
 """
-Batch enthalpy of mixing calculator.
+Batch enthalpy of mixing visualizer.
 
-Iterates over all element combinations (size 2–4 by default) defined in the Excel
-data source, enumerates compositions using a configurable step (default 0.1) and
-minimum fraction, evaluates the enthalpy of mixing via the interactive calculator
-module, and streams the aggregated results to an Excel workbook with individual
-sheets for binary, ternary, and quaternary alloys.
+Generates ΔH_mix curves/contours by reusing the single-pair calculator:
+1) Batch binary line plots (0–100% at 0.1% increments)
+2) Batch ternary contour plots (barycentric triangle)
+3) (Reserved) Quaternary – currently skipped
+4) Custom combination preview with Plotly (hover + draggable labels, optional export)
 """
 
 from __future__ import annotations
 
 import argparse
 import importlib.util
+import math
+import re
 import sys
-from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Sequence, Tuple
 
-import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.tri as mtri
+import plotly.graph_objects as go
+
+# --------------------------------------------------------------------------- #
+# Font configuration (edit here to change all text styles)
+# --------------------------------------------------------------------------- #
+
+FONT_SIZE = 20
+FONT_COLOR = "black"
+FONT_WEIGHT = "bold"
+
+ELEMENT_LABEL_FONT = {
+    "fontsize": FONT_SIZE,
+    "fontweight": FONT_WEIGHT,
+    "color": FONT_COLOR,
+}
+PLOTLY_ELEMENT_FONT = {
+    "size": FONT_SIZE,
+    "color": FONT_COLOR,
+}
+
+# --------------------------------------------------------------------------- #
+# Sampling configuration
+# --------------------------------------------------------------------------- #
+
+BINARY_STEP = 0.001  # 0.1%
+TERNARY_STEP = 0.01  # 1%
 
 # --------------------------------------------------------------------------- #
 # Calculator module loading
@@ -44,37 +72,6 @@ def load_calculator_module(script_path: Path):
 # --------------------------------------------------------------------------- #
 
 
-@dataclass(frozen=True)
-class CompositionVector:
-    """Represents a single composition (element symbols + mole fractions)."""
-
-    elements: Tuple[str, ...]
-    fractions: Tuple[float, ...]
-
-
-def build_fraction_vectors(
-    count: int,
-    total_units: int,
-    min_units: int,
-) -> List[Tuple[int, ...]]:
-    """Enumerate integer solutions that sum to total_units with per-element minimum."""
-
-    def recurse(index: int, remaining: int, current: List[int]) -> Iterator[Tuple[int, ...]]:
-        if index == count - 1:
-            if remaining >= min_units:
-                yield tuple(current + [remaining])
-            return
-        max_units = remaining - min_units * (count - index - 1)
-        for value in range(min_units, max_units + 1):
-            current.append(value)
-            yield from recurse(index + 1, remaining - value, current)
-            current.pop()
-
-    if min_units * count > total_units:
-        return []
-    return list(recurse(0, total_units, []))
-
-
 def normalize_step(step: float) -> Tuple[int, float]:
     """Return total units and the adjusted step so that 1 = step * total_units."""
     if step <= 0 or step > 1:
@@ -89,62 +86,117 @@ def normalize_step(step: float) -> Tuple[int, float]:
     return total_units, actual_step
 
 
-def generate_compositions(
-    elements: Sequence[str],
-    fraction_vectors: Sequence[Tuple[int, ...]],
-    total_units: int,
-) -> Iterable[CompositionVector]:
-    """Convert unit-based vectors into floating-point mole fractions."""
-    for vector in fraction_vectors:
-        fractions = tuple(unit / total_units for unit in vector)
-        yield CompositionVector(tuple(elements), fractions)
+def build_fraction_vectors(count: int, total_units: int) -> List[Tuple[int, ...]]:
+    """Enumerate integer solutions that sum to total_units (allowing zeros)."""
 
-
-# --------------------------------------------------------------------------- #
-# Excel streaming helper
-# --------------------------------------------------------------------------- #
-
-
-class SheetWriter:
-    """Streaming writer that appends rows to an Excel worksheet."""
-
-    def __init__(self, writer: pd.ExcelWriter, sheet_name: str, columns: List[str]) -> None:
-        self.writer = writer
-        self.sheet_name = sheet_name
-        self.columns = columns
-        self.row_offset = 0
-        self.header_written = False
-
-    def write_rows(self, rows: List[Dict[str, object]]) -> None:
-        if not rows:
+    def recurse(index: int, remaining: int, current: List[int]) -> Iterator[Tuple[int, ...]]:
+        if index == count - 1:
+            current.append(remaining)
+            yield tuple(current)
+            current.pop()
             return
-        df = pd.DataFrame(rows)
-        df = df.reindex(columns=self.columns)
-        df.to_excel(
-            self.writer,
-            sheet_name=self.sheet_name,
-            startrow=self.row_offset,
-            index=False,
-            header=not self.header_written,
-        )
-        if not self.header_written:
-            self.header_written = True
-            self.row_offset += len(df) + 1  # include header row
-        else:
-            self.row_offset += len(df)
+        for value in range(0, remaining + 1):
+            current.append(value)
+            yield from recurse(index + 1, remaining - value, current)
+            current.pop()
 
-    def finalize(self) -> None:
-        """Ensure the sheet exists even if no data was written."""
-        if not self.header_written:
-            empty = pd.DataFrame(columns=self.columns)
-            empty.to_excel(
-                self.writer,
-                sheet_name=self.sheet_name,
-                index=False,
-                header=True,
-            )
-            self.header_written = True
-            self.row_offset = 1
+    return list(recurse(0, total_units, []))
+
+
+def fractions_from_vector(vector: Sequence[int], total_units: int) -> Tuple[float, ...]:
+    """Convert integer counts to normalized mole fractions."""
+    if total_units == 0:
+        raise ValueError("Total units must be positive.")
+    return tuple(value / total_units for value in vector)
+
+
+def barycentric_to_cartesian(fractions: Sequence[float]) -> Tuple[float, float]:
+    """Map ternary fractions (A,B,C) to 2D coordinates inside an equilateral triangle."""
+    if len(fractions) != 3:
+        raise ValueError("Ternary barycentric conversion requires exactly 3 fractions.")
+    a, b, c = fractions
+    x = b + 0.5 * c
+    y = (math.sqrt(3) / 2.0) * c
+    return x, y
+
+
+# --------------------------------------------------------------------------- #
+def combo_supported(calculator, tables, combo: Sequence[str]) -> bool:
+    """Return True if every pair within combo has Ω data."""
+    try:
+        for elem_a, elem_b in combinations(combo, 2):
+            calculator.lookup_omegas(tables, elem_a, elem_b)
+        return True
+    except KeyError:
+        return False
+
+
+def ensure_directory(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_binary_plot(combo: Sequence[str], fractions: List[float], enthalpies: List[float], out_dir: Path) -> None:
+    path = ensure_directory(out_dir) / f"{combo[0]}-{combo[1]}.png"
+    plt.figure(figsize=(6, 4))
+    plt.plot([f * 100 for f in fractions], enthalpies, lw=1.5)
+    plt.xlabel(f"{combo[0]} atomic %")
+    plt.ylabel("ΔH_mix (kJ/mol)")
+    plt.title(f"Binary ΔH_mix: {combo[0]}-{combo[1]}")
+    plt.grid(True, linestyle="--", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+
+
+def save_ternary_plot(
+    combo: Sequence[str],
+    xs: List[float],
+    ys: List[float],
+    values: List[float],
+    out_dir: Path,
+) -> None:
+    path = ensure_directory(out_dir) / f"{combo[0]}-{combo[1]}-{combo[2]}.png"
+    plt.figure(figsize=(6, 5.5))
+    triang = mtri.Triangulation(xs, ys)
+    mesh = plt.tripcolor(triang, values, shading="gouraud", cmap="viridis")
+    plt.colorbar(mesh, label="ΔH_mix (kJ/mol)")
+    combo_label = "-".join(combo)
+    plt.title(r"Ternary $\Delta H_{\mathrm{mix}}$: " + combo_label)
+    # annotate corners
+    corners = {
+        combo[0]: (0.0, 0.0),
+        combo[1]: (1.0, 0.0),
+        combo[2]: (0.5, math.sqrt(3) / 2.0),
+    }
+    for name, (x, y) in corners.items():
+        plt.text(
+            x,
+            y,
+            name,
+            ha="center",
+            va="center",
+            **ELEMENT_LABEL_FONT,
+        )
+    plt.axis("off")
+    plt.tight_layout()
+    plt.savefig(path, dpi=250)
+    plt.close()
+
+
+def preview_and_maybe_save(fig: go.Figure, default_path: Path) -> None:
+    config = {"editable": True, "edits": {"annotationPosition": True}}
+    fig.show(config=config)
+    save = input(f"Save figure to {default_path}? (y/n): ").strip().lower()
+    if save == "y":
+        default_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fig.write_image(str(default_path))
+            print(f"Saved PNG to {default_path}")
+        except Exception as exc:  # pylint: disable=broad-except
+            alt_path = default_path.with_suffix(".html")
+            fig.write_html(str(alt_path))
+            print(f"PNG export failed ({exc}); saved interactive HTML to {alt_path}")
 
 
 # --------------------------------------------------------------------------- #
@@ -152,126 +204,188 @@ class SheetWriter:
 # --------------------------------------------------------------------------- #
 
 
-def sheet_columns(component_count: int) -> List[str]:
-    """Generate column names for a given component count."""
-    columns = ["Elements"]
-    for idx in range(1, component_count + 1):
-        columns.extend([f"Element{idx}", f"x{idx}", f"x{idx}_pct"])
-    columns.append("DeltaH_kJ_per_mol")
-    return columns
-
-
-def build_row(
-    elements: Sequence[str],
-    fractions: Sequence[float],
-    delta_h: float,
-) -> Dict[str, object]:
-    """Format a row dict for DataFrame/appending."""
-    row: Dict[str, object] = {"Elements": "-".join(elements), "DeltaH_kJ_per_mol": delta_h}
-    for idx, (symbol, fraction) in enumerate(zip(elements, fractions), start=1):
-        row[f"Element{idx}"] = symbol
-        row[f"x{idx}"] = round(fraction, 6)
-        row[f"x{idx}_pct"] = round(fraction * 100.0, 4)
-    return row
-
-
-def iterate_combinations(
-    elements: Sequence[str],
-    size: int,
-) -> Iterable[Tuple[str, ...]]:
-    """Wrapper around itertools.combinations for readability."""
-    return combinations(elements, size)
-
-
 def run_batch(
     calculator,
-    excel_path: Path,
-    min_components: int,
-    max_components: int,
+    tables: Dict[str, pd.DataFrame],
+    component_count: int,
     elements: Sequence[str],
-    step: float,
-    min_fraction: float,
-    chunk_size: int,
     output_path: Path,
 ) -> None:
-    """Main batch-processing routine."""
-    if chunk_size <= 0:
-        raise ValueError("chunk_size must be positive.")
-    if min_components > max_components:
-        raise ValueError("min_components cannot exceed max_components.")
-    if not (0 < step <= 1):
-        raise ValueError("Step must be within (0, 1].")
-    if not (0 < min_fraction <= 1):
-        raise ValueError("min_fraction must be within (0, 1].")
+    """Generate one plot per element combination for the chosen component count."""
+    if component_count not in {2, 3, 4}:
+        raise ValueError("Only 2-, 3-, or 4-component alloys are supported.")
 
-    tables = calculator.load_omega_tables(excel_path)
     available_elements = [el for el in tables[calculator.OMEGA_SHEETS[0]].index if el in elements]
-    if not available_elements:
-        raise ValueError("No valid elements were selected for processing.")
+    if len(available_elements) < component_count:
+        raise ValueError("Not enough elements to form the requested combinations.")
 
-    total_units, actual_step = normalize_step(step)
-    min_units = max(1, round(min_fraction * total_units))
+    # Binary alloys require 0.1% increments regardless of the CLI step.
+    total_units, actual_step = normalize_step(BINARY_STEP if component_count == 2 else TERNARY_STEP)
+    vectors = build_fraction_vectors(component_count, total_units)
+    if not vectors:
+        raise ValueError("No feasible compositions were generated with the provided step.")
 
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        for component_count in range(min_components, max_components + 1):
-            sheet_name = f"{component_count}-component"
-            columns = sheet_columns(component_count)
-            sheet_writer = SheetWriter(writer, sheet_name, columns)
-            if min_units * component_count > total_units:
-                print(
-                    f"[info] Skipping {component_count}-component alloys: "
-                    f"min_fraction * count exceeds 100%.",
-                    file=sys.stderr,
-                )
-                sheet_writer.finalize()
-                continue
+    ensure_directory(output_path)
+    processed = 0
+    skipped = 0
 
-            fraction_vectors = build_fraction_vectors(component_count, total_units, min_units)
-            if not fraction_vectors:
-                print(
-                    f"[info] No feasible compositions for {component_count} components.",
-                    file=sys.stderr,
-                )
-                sheet_writer.finalize()
-                continue
+    for combo in combinations(available_elements, component_count):
+        if not combo_supported(calculator, tables, combo):
+            skipped += 1
+            continue
 
-            combo_iter = iterate_combinations(available_elements, component_count)
-            buffer: List[Dict[str, object]] = []
-            skipped_combos = 0
-            processed = 0
+        if component_count == 2:
+            plot_binary_combination(calculator, tables, combo, total_units, output_path)
 
-            for combo in combo_iter:
-                combo_failed = False
-                for composition in generate_compositions(combo, fraction_vectors, total_units):
-                    comp_pairs = list(composition.elements)
-                    comp_fractions = list(composition.fractions)
-                    comp_zip = list(zip(comp_pairs, comp_fractions))
-                    try:
-                        total_enthalpy, _ = calculator.compute_multi_component_enthalpy(
-                            tables, comp_zip
-                        )
-                    except KeyError:
-                        combo_failed = True
-                        break
-                    buffer.append(build_row(comp_pairs, comp_fractions, total_enthalpy))
-                    if len(buffer) >= chunk_size:
-                        sheet_writer.write_rows(buffer)
-                        buffer.clear()
-                if combo_failed:
-                    skipped_combos += 1
-                else:
-                    processed += 1
+        elif component_count == 3:
+            plot_ternary_combination(calculator, tables, combo, vectors, total_units, output_path)
 
-            if buffer:
-                sheet_writer.write_rows(buffer)
-                buffer.clear()
-            sheet_writer.finalize()
+        else:
+            print(f"[info] Skipping {combo}: quaternary plotting not implemented.")
+            skipped += 1
+            continue
 
-            print(
-                f"[summary] {component_count}-component alloys: "
-                f"{processed} combinations processed, {skipped_combos} skipped.",
-                file=sys.stderr,
+        processed += 1
+
+    print(
+        f"[summary] step={actual_step:.4f}: "
+        f"{processed} combinations plotted, {skipped} skipped.",
+        file=sys.stderr,
+    )
+
+
+def plot_binary_combination(calculator, tables, combo, total_units, output_dir: Path) -> None:
+    fractions = [i / total_units for i in range(total_units + 1)]
+    enthalpies: List[float] = []
+    for frac_a in fractions:
+        frac_b = 1.0 - frac_a
+        composition = [(combo[0], frac_a), (combo[1], frac_b)]
+        total_enthalpy, _ = calculator.compute_multi_component_enthalpy(tables, composition)
+        enthalpies.append(total_enthalpy)
+    save_binary_plot(combo, fractions, enthalpies, output_dir / "binary")
+
+
+def plot_ternary_combination(
+    calculator,
+    tables,
+    combo,
+    vectors: Sequence[Tuple[int, ...]],
+    total_units: int,
+    output_dir: Path,
+) -> None:
+    xs: List[float] = []
+    ys: List[float] = []
+    values: List[float] = []
+    for vector in vectors:
+        fractions = fractions_from_vector(vector, total_units)
+        composition = list(zip(combo, fractions))
+        total_enthalpy, _ = calculator.compute_multi_component_enthalpy(tables, composition)
+        x, y = barycentric_to_cartesian(fractions)
+        xs.append(x)
+        ys.append(y)
+        values.append(total_enthalpy)
+    save_ternary_plot(combo, xs, ys, values, output_dir / "ternary")
+
+
+def handle_custom_plot(calculator, tables, output_dir: Path) -> None:
+    raw = input("Enter element symbols separated by commas (e.g., Fe,B or Fe,B,Ni): ").strip()
+    if not raw:
+        print("No elements entered.")
+        return
+    symbols = [calculator.normalize_symbol(part) for part in re.split(r"[\\s,]+", raw) if part]
+    unique_elements = []
+    for symbol in symbols:
+        if symbol not in unique_elements:
+            unique_elements.append(symbol)
+    if len(unique_elements) < 2 or len(unique_elements) > 4:
+        print("Please provide between 2 and 4 unique elements.")
+        return
+    for element in unique_elements:
+        if element not in tables[calculator.OMEGA_SHEETS[0]].index:
+            print(f"Element {element} is not available in the database.")
+            return
+
+    component_count = len(unique_elements)
+    step_value = BINARY_STEP if component_count == 2 else TERNARY_STEP
+    total_units, _ = normalize_step(step_value)
+    custom_dir = ensure_directory(output_dir / "custom")
+    combo = tuple(unique_elements)
+    if component_count == 2:
+        fractions = [i / total_units for i in range(total_units + 1)]
+        enthalpies = []
+        for frac_a in fractions:
+            frac_b = 1.0 - frac_a
+            composition = [(combo[0], frac_a), (combo[1], frac_b)]
+            total_enthalpy, _ = calculator.compute_multi_component_enthalpy(tables, composition)
+            enthalpies.append(total_enthalpy)
+        fig = go.Figure(
+            go.Scatter(
+                x=[f * 100 for f in fractions],
+                y=enthalpies,
+                mode="lines+markers",
+                hovertemplate=(
+                    f"{combo[0]}=%{{x:.3f}}%\n{combo[1]}=%{{customdata:.3f}}%\nΔH=%{{y:.5f}} kJ/mol"
+                ),
+                customdata=[(1.0 - f) * 100 for f in fractions],
             )
+        )
+        fig.update_layout(
+            title=dict(text=f"Binary ΔH_mix: {'-'.join(combo)}", font=PLOTLY_ELEMENT_FONT),
+            xaxis=dict(title=dict(text=f"{combo[0]} atomic %", font=PLOTLY_ELEMENT_FONT)),
+            yaxis=dict(title=dict(text="ΔH_mix (kJ/mol)", font=PLOTLY_ELEMENT_FONT)),
+            template="plotly_white",
+        )
+        preview_and_maybe_save(fig, custom_dir / f"{combo[0]}-{combo[1]}.png")
+    elif component_count == 3:
+        vectors = build_fraction_vectors(3, total_units)
+        a_vals = []
+        b_vals = []
+        c_vals = []
+        enthalpies = []
+        for vector in vectors:
+            fractions = fractions_from_vector(vector, total_units)
+            composition = list(zip(combo, fractions))
+            total_enthalpy, _ = calculator.compute_multi_component_enthalpy(tables, composition)
+            a_vals.append(fractions[0] * 100)
+            b_vals.append(fractions[1] * 100)
+            c_vals.append(fractions[2] * 100)
+            enthalpies.append(total_enthalpy)
+        fig = go.Figure(
+            go.Scatterternary(
+                a=a_vals,
+                b=b_vals,
+                c=c_vals,
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color=enthalpies,
+                    colorscale="Viridis",
+                    colorbar=dict(title="ΔH_mix (kJ/mol)"),
+                ),
+                hovertemplate=(
+                    f"{combo[0]}=%{{a:.2f}}%<br>"
+                    f"{combo[1]}=%{{b:.2f}}%<br>"
+                    f"{combo[2]}=%{{c:.2f}}%<br>"
+                    "ΔH=%{marker.color:.5f} kJ/mol"
+                ),
+            )
+        )
+        fig.update_layout(
+            title=dict(
+                text=f"Ternary ΔH<sub>mix</sub>: {'-'.join(combo)}",
+                font=PLOTLY_ELEMENT_FONT,
+            ),
+            ternary=dict(
+                sum=100,
+                aaxis=dict(title=dict(text=combo[0], font=PLOTLY_ELEMENT_FONT)),
+                baxis=dict(title=dict(text=combo[1], font=PLOTLY_ELEMENT_FONT)),
+                caxis=dict(title=dict(text=combo[2], font=PLOTLY_ELEMENT_FONT)),
+            ),
+            template="plotly_white",
+        )
+        preview_and_maybe_save(fig, custom_dir / f"{combo[0]}-{combo[1]}-{combo[2]}.png")
+    else:
+        print("Quaternary plotting is not supported yet.")
 
 
 # --------------------------------------------------------------------------- #
@@ -279,15 +393,8 @@ def run_batch(
 # --------------------------------------------------------------------------- #
 
 
-MENU_OPTIONS = {
-    "1": ("Binary (2 components)", 2),
-    "2": ("Ternary (3 components)", 3),
-    "3": ("Quaternary (4 components)", 4),
-}
-
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Batch enthalpy calculator (2–4 components).")
+    parser = argparse.ArgumentParser(description="Batch enthalpy plot generator.")
     parser.add_argument(
         "--calculator",
         type=Path,
@@ -301,34 +408,15 @@ def parse_args() -> argparse.Namespace:
         help="Path to the Omega matrices workbook (defaults to calculator's setting).",
     )
     parser.add_argument(
-        "--component-option",
-        choices=MENU_OPTIONS.keys(),
-        help="Preset options: 1=Binary, 2=Ternary, 3=Quaternary. "
-        "If omitted, an interactive menu will appear.",
-    )
-    parser.add_argument(
         "--elements",
         nargs="*",
         help="Optional whitelist of element symbols (defaults to all available).",
     )
-    parser.add_argument("--step", type=float, default=0.1, help="Mole fraction step (0 < step ≤ 1).")
     parser.add_argument(
-        "--min-fraction",
-        type=float,
-        default=None,
-        help="Minimum fraction per element (defaults to the step size).",
-    )
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=5000,
-        help="Number of rows to buffer before writing to Excel.",
-    )
-    parser.add_argument(
-        "--output",
+        "--output-dir",
         type=Path,
-        default=None,
-        help="Output Excel filename (defaults to Data/batch_enthalpy_results.xlsx).",
+        default=Path("Data/plots"),
+        help="Directory to store generated plots (default: Data/plots).",
     )
     return parser.parse_args()
 
@@ -342,44 +430,54 @@ def main() -> None:
         if args.excel_db
         else Path(calculator.DEFAULT_DATABASE_PATH)  # type: ignore[attr-defined]
     )
-    min_fraction = args.min_fraction if args.min_fraction is not None else args.step
+    tables = calculator.load_omega_tables(excel_path)
 
     element_pool = (
         [calculator.normalize_symbol(sym) for sym in args.elements]
         if args.elements
-        else calculator.ATOMIC_NUMBERS.keys()
+        else list(tables[calculator.OMEGA_SHEETS[0]].index)
     )
 
-    if args.component_option:
-        _, component_count = MENU_OPTIONS[args.component_option]
-    else:
-        print("Select alloy type:")
-        for key, (label, _) in MENU_OPTIONS.items():
-            print(f"{key}) {label}")
-        while True:
-            choice = input("Enter option (1/2/3): ").strip()
-            if choice in MENU_OPTIONS:
-                _, component_count = MENU_OPTIONS[choice]
-                break
-            print("Invalid option. Please enter 1, 2, or 3.")
+    while True:
+        print("\n=== Enthalpy Plot Menu ===")
+        print("1) Batch binary ΔH_mix curves")
+        print("2) Batch ternary ΔH_mix contour plots")
+        print("3) Batch quaternary (not supported)")
+        print("4) Custom combination plot")
+        print("q) Quit")
+        choice = input("Select an option: ").strip().lower()
 
-    try:
-        run_batch(
-            calculator=calculator,
-            excel_path=excel_path,
-            min_components=component_count,
-            max_components=component_count,
-            elements=list(element_pool),
-            step=args.step,
-            min_fraction=min_fraction,
-            chunk_size=args.chunk_size,
-            output_path=Path(args.output)
-            if args.output
-            else Path("Data/batch_enthalpy_results.xlsx"),
-        )
-    except Exception as exc:  # pylint: disable=broad-except
-        print(f"Batch processing failed: {exc}", file=sys.stderr)
-        raise
+        if choice == "1":
+            try:
+                run_batch(
+                    calculator=calculator,
+                    tables=tables,
+                    component_count=2,
+                    elements=element_pool,
+                    output_path=args.output_dir,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"Binary plotting failed: {exc}")
+        elif choice == "2":
+            try:
+                run_batch(
+                    calculator=calculator,
+                    tables=tables,
+                    component_count=3,
+                    elements=element_pool,
+                    output_path=args.output_dir,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"Ternary plotting failed: {exc}")
+        elif choice == "3":
+            print("Quaternary visualizations are not supported at the moment.")
+        elif choice == "4":
+            handle_custom_plot(calculator, tables, args.output_dir)
+        elif choice in {"q", "quit", "exit"}:
+            print("Bye.")
+            break
+        else:
+            print("Invalid selection. Please choose 1–4 or q.")
 
 
 if __name__ == "__main__":
