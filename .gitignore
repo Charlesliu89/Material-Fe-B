@@ -7,3 +7,8 @@ __pycache__/
 
 # VS Code settings (optional)
 .vscode/
+# macOS artifacts
+.DS_Store
+
+# Generated files
+*.xlsx
