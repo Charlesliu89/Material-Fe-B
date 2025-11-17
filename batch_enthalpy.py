@@ -87,6 +87,17 @@ FONT_SIZE = 20
 FONT_COLOR = "black"
 FONT_WEIGHT = "bold"
 
+# Shared export configuration
+MATPLOTLIB_DPI = 320
+MATPLOTLIB_BINARY_FIGSIZE = (7.0, 5.0)
+MATPLOTLIB_TERNARY_FIGSIZE = (7.0, 6.0)
+
+PLOTLY_EXPORT = {
+    "width": 1280,
+    "height": 960,
+    "scale": 2,  # boost PNG resolution
+}
+
 PLOTLY_BASE_FONT = {
     "family": DEFAULT_FONT_FAMILY,
     "color": FONT_COLOR,
@@ -164,6 +175,11 @@ def add_plotly_colorbar_label(fig: "go.Figure") -> None:
 def apply_plotly_base_style(fig: "go.Figure") -> None:
     """Ensure Plotly figures use a Unicode-safe font everywhere."""
     fig.update_layout(font=PLOTLY_BASE_FONT)
+
+
+def write_plotly_image(fig: "go.Figure", target: Path) -> None:
+    """Export Plotly figures with consistent resolution/style settings."""
+    fig.write_image(str(target), **PLOTLY_EXPORT)
 
 # --------------------------------------------------------------------------- #
 # Sampling configuration
@@ -261,14 +277,14 @@ def ensure_directory(path: Path) -> Path:
 
 def save_binary_plot(combo: Sequence[str], fractions: List[float], enthalpies: List[float], out_dir: Path) -> None:
     path = ensure_directory(out_dir) / f"{combo[0]}-{combo[1]}.png"
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=MATPLOTLIB_BINARY_FIGSIZE)
     plt.plot([f * 100 for f in fractions], enthalpies, lw=1.5)
     plt.xlabel(f"{combo[0]} atomic %")
     plt.ylabel(r"$\Delta H_{\mathrm{mix}}$ (kJ/mol)")
     plt.title(r"Binary $\Delta H_{\mathrm{mix}}$: " + "-".join(combo))
     plt.grid(True, linestyle="--", alpha=0.3)
     plt.tight_layout()
-    plt.savefig(path, dpi=200)
+    plt.savefig(path, dpi=MATPLOTLIB_DPI)
     plt.close()
 
 
@@ -280,7 +296,7 @@ def save_ternary_plot(
     out_dir: Path,
 ) -> None:
     path = ensure_directory(out_dir) / f"{combo[0]}-{combo[1]}-{combo[2]}.png"
-    plt.figure(figsize=(6, 5.5))
+    plt.figure(figsize=MATPLOTLIB_TERNARY_FIGSIZE)
     triang = mtri.Triangulation(xs, ys)
     mesh = plt.tripcolor(triang, values, shading="gouraud", cmap="viridis")
     cbar = plt.colorbar(mesh)
@@ -304,7 +320,7 @@ def save_ternary_plot(
         )
     plt.axis("off")
     plt.tight_layout()
-    plt.savefig(path, dpi=250)
+    plt.savefig(path, dpi=MATPLOTLIB_DPI)
     plt.close()
 
 
@@ -315,7 +331,7 @@ def preview_and_maybe_save(fig: go.Figure, default_path: Path) -> None:
     if save == "y":
         default_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            fig.write_image(str(default_path))
+            write_plotly_image(fig, default_path)
             print(f"Saved PNG to {default_path}")
         except Exception as exc:  # pylint: disable=broad-except
             alt_path = default_path.with_suffix(".html")
@@ -776,7 +792,7 @@ def generate_custom_plots(
 
         target = custom_dir / filename
         try:
-            fig.write_image(str(target))
+            write_plotly_image(fig, target)
             print(f"[auto] Saved PNG to {target}")
             saved.append(target)
         except Exception as exc:  # pylint: disable=broad-except
