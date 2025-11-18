@@ -554,6 +554,7 @@ def _slice_quaternary_data(
     fixed_element: str,
     fixed_fraction: float,
     step: float = BINARY_STEP,  # 0.1% increments for slice projection
+    tolerance: float | None = None,
 ) -> Tuple[Sequence[str], List[float], List[float], List[float], List[float]]:
     """Re-sample a ternary slice by fixing one element and recomputing ΔH on the slice grid."""
 
@@ -567,6 +568,19 @@ def _slice_quaternary_data(
     remainder = 1.0 - fixed_fraction
     if remainder <= 0:
         raise ValueError("Fixed fraction leaves no remaining composition to vary.")
+
+    # If tolerance provided, filter the base quaternary points to those near the target slice.
+    filtered_fractions: Optional[List[Tuple[float, ...]]] = None
+    if tolerance is not None:
+        filtered_fractions = []
+        base_total_units, _ = normalize_step(step)
+        base_vectors = build_fraction_vectors(4, base_total_units)
+        for vector in base_vectors:
+            frac = fractions_from_vector(vector, base_total_units)
+            if abs(frac[combo.index(fixed_element)] - fixed_fraction) <= tolerance:
+                filtered_fractions.append(frac)
+        if filtered_fractions:
+            remainder = 1.0 - fixed_fraction
 
     total_units, _ = normalize_step(step)
     vectors = build_fraction_vectors(3, total_units)
@@ -929,6 +943,7 @@ def handle_quaternary_preview(calculator, tables, output_dir: Path) -> None:
                     element,
                     fraction_percent / 100.0,
                     step=BINARY_STEP,  # 0.1% increments for the slice
+                    tolerance=actual_step / 2,  # match preview sampling density
                 )
             except ValueError as exc:
                 print(exc)
@@ -1035,6 +1050,13 @@ def positive_int(value: str) -> int:
     return number
 
 
+def non_negative_int(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError("Value must be zero or a positive integer.")
+    return number
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Batch enthalpy plot generator.")
     parser.add_argument(
@@ -1076,7 +1098,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--chunk-size",
-        type=positive_int,
+        type=non_negative_int,
         default=BATCH_CHUNK_SIZE,
         help="Number of combinations to process before prompting (set 0 to disable chunking).",
     )
