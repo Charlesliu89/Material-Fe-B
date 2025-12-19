@@ -14,6 +14,7 @@ import argparse
 import importlib.util
 import os
 import re
+import shutil
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import combinations
@@ -40,6 +41,7 @@ from enthalpy_core import (
     compute_multi_component_enthalpy,
     fractions_from_vector,
     load_omega_tables,
+    lookup_omegas,
     normalize_step,
     normalize_symbol,
 )
@@ -58,9 +60,10 @@ from enthalpy_plot import (
 
 
 def combo_supported(calculator, tables, combo: Sequence[str]) -> bool:
+    lookup = getattr(calculator, "lookup_omegas", lookup_omegas)
     try:
         for elem_a, elem_b in combinations(combo, 2):
-            calculator.lookup_omegas(tables, elem_a, elem_b)
+            lookup(tables, elem_a, elem_b)
         return True
     except KeyError:
         return False
@@ -489,6 +492,138 @@ def handle_quaternary_preview(calculator, tables, output_dir: Path) -> None:
             break
 
 
+def handle_equimolar_quinary(calculator, tables, element_pool: Sequence[str], output_dir: Path) -> None:
+    available_elements = [el for el in tables[OMEGA_SHEETS[0]].index if el in element_pool]
+    if len(available_elements) < 5:
+        print("At least 5 elements are required in the current element pool.")
+        return
+
+    prompt = "Enter 1-4 base elements separated by commas (e.g., Fe,Co) or 'b' to return: "
+    while True:
+        raw = input(prompt).strip()
+        if not raw:
+            print("No elements entered. Provide 1-4 symbols or 'b' to return.")
+            continue
+        if raw.lower() in {"b", "back", "r", "return"}:
+            print("Returning to the main menu.")
+            return
+
+        symbols = [calculator.normalize_symbol(part) for part in re.split(r"[\\s,]+", raw) if part]
+        base_elements: List[str] = []
+        for symbol in symbols:
+            if symbol not in base_elements:
+                base_elements.append(symbol)
+
+        if len(base_elements) < 1 or len(base_elements) > 4:
+            print("Please provide between 1 and 4 unique elements.")
+            continue
+
+        missing = [el for el in base_elements if el not in available_elements]
+        if missing:
+            print(f"Elements not in the current pool: {', '.join(missing)}.")
+            continue
+
+        remaining_needed = 5 - len(base_elements)
+        remaining_elements = [el for el in available_elements if el not in base_elements]
+        if len(remaining_elements) < remaining_needed:
+            print("Not enough remaining elements to build 5-component combinations.")
+            continue
+
+        results: List[Tuple[float, Tuple[str, ...]]] = []
+        skipped = 0
+        for extra in combinations(remaining_elements, remaining_needed):
+            combo = tuple(base_elements + list(extra))
+            if not combo_supported(calculator, tables, combo):
+                skipped += 1
+                continue
+            composition = [(element, 1.0 / 5.0) for element in combo]
+            total_enthalpy, _ = calculator.compute_multi_component_enthalpy(tables, composition)
+            results.append((total_enthalpy, combo))
+
+        if not results:
+            print("No valid 5-component combinations were found with complete Ω data.")
+            return
+
+        non_negative = sorted((item for item in results if item[0] >= 0), key=lambda x: x[0])
+        negative = sorted((item for item in results if item[0] < 0), key=lambda x: x[0])
+
+        print("\nEquimolar 5-component ΔH_mix (each element = 20%)")
+        print(f"Base elements: {', '.join(base_elements)}")
+        print(f"Element pool size: {len(available_elements)}")
+        print(f"Combinations evaluated: {len(results)}; skipped: {skipped}")
+
+        left_header = "ΔH_mix >= 0 (kJ/mol)"
+        right_header = "ΔH_mix < 0 (kJ/mol)"
+        index_width = max(2, len(str(len(results))))
+        index_map: Dict[int, Tuple[float, Tuple[str, ...]]] = {}
+
+        def _build_entries(items: Sequence[Tuple[float, Tuple[str, ...]]]) -> List[str]:
+            entries: List[str] = []
+            for value, combo in items:
+                idx = len(index_map) + 1
+                index_map[idx] = (value, combo)
+                entries.append(f"{idx:>{index_width}d}. {value:>10.5f}  {'-'.join(combo)}")
+            return entries
+
+        left_entries = _build_entries(non_negative) if non_negative else ["None."]
+        right_entries = _build_entries(negative) if negative else ["None."]
+
+        term_width = shutil.get_terminal_size((120, 20)).columns
+        print("")
+        print(left_header + ":")
+        for line in _format_multi_column(left_entries, term_width):
+            print(line)
+        print("")
+        print(right_header + ":")
+        for line in _format_multi_column(right_entries, term_width):
+            print(line)
+
+        if index_map:
+            while True:
+                detail_raw = input(
+                    "Enter indices for pairwise ΔH details (e.g., 1,3-5), or press Enter to continue: "
+                ).strip()
+                if not detail_raw:
+                    break
+                selected = _parse_index_selection(detail_raw, max(index_map.keys()))
+                if not selected:
+                    print("No valid indices were selected.")
+                    continue
+                for idx in selected:
+                    value, combo = index_map[idx]
+                    composition = [(element, 1.0 / 5.0) for element in combo]
+                    total_enthalpy, details = calculator.compute_multi_component_enthalpy(
+                        tables, composition
+                    )
+                    print(f"\n[{idx}] {'-'.join(combo)}  ΔH_mix={total_enthalpy:.5f} kJ/mol")
+                    if not details:
+                        print("No pairwise contributions available.")
+                        continue
+                    print("Pairwise contributions (kJ/mol):")
+                    for pair, (c_a, c_b), delta_h in details:
+                        print(f"{pair:<10s} ΔH = {delta_h:>10.5f} (c_A={c_a:.4f}, c_B={c_b:.4f})")
+
+        save_raw = input("Save results to Excel? (y/n): ").strip().lower()
+        if save_raw in {"y", "yes"}:
+            total_rows = max(len(left_entries), len(right_entries))
+            rows = []
+            for idx in range(total_rows):
+                left_text = left_entries[idx] if idx < len(left_entries) else ""
+                right_text = right_entries[idx] if idx < len(right_entries) else ""
+                rows.append({left_header: left_text, right_header: right_text})
+
+            df = pd.DataFrame(rows, columns=[left_header, right_header])
+            target_dir = ensure_directory(output_dir / "quinary")
+            filename = f"equimolar_5_{'-'.join(base_elements)}.xlsx"
+            target = target_dir / filename
+            try:
+                df.to_excel(target, index=False)
+                print(f"Saved Excel to {target}")
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"Failed to write Excel: {exc}")
+        return
+
+
 def _slice_quaternary_data(
     calculator,
     tables,
@@ -529,6 +664,50 @@ def _slice_quaternary_data(
         enthalpy_slice.append(total_enthalpy)
 
     return remaining_elements, a_vals, b_vals, c_vals, enthalpy_slice
+
+
+def _format_multi_column(entries: Sequence[str], max_width: int) -> List[str]:
+    if not entries:
+        return ["None."]
+    column_width = max(len(entry) for entry in entries) + 2
+    columns = max(1, max_width // column_width)
+    rows = (len(entries) + columns - 1) // columns
+    lines: List[str] = []
+    for row in range(rows):
+        parts = []
+        for col in range(columns):
+            idx = row + col * rows
+            if idx >= len(entries):
+                continue
+            parts.append(entries[idx].ljust(column_width))
+        lines.append("".join(parts).rstrip())
+    return lines
+
+
+def _parse_index_selection(raw: str, max_index: int) -> List[int]:
+    tokens = [token for token in re.split(r"[,\s]+", raw.strip()) if token]
+    selected: List[int] = []
+    for token in tokens:
+        if "-" in token:
+            start_raw, end_raw = token.split("-", 1)
+            try:
+                start = int(start_raw)
+                end = int(end_raw)
+            except ValueError:
+                continue
+            if start > end:
+                start, end = end, start
+            for idx in range(start, end + 1):
+                if 1 <= idx <= max_index and idx not in selected:
+                    selected.append(idx)
+            continue
+        try:
+            idx = int(token)
+        except ValueError:
+            continue
+        if 1 <= idx <= max_index and idx not in selected:
+            selected.append(idx)
+    return selected
 
 
 # --------------------------------------------------------------------------- #
@@ -676,6 +855,7 @@ def main() -> None:
         print("2) Batch ternary ΔH_mix contour plots")
         print("3) Quaternary ΔH_mix tetrahedron (preview + slice export)")
         print("4) Custom combination plot")
+        print("5) Equimolar 5-component ΔH_mix list")
         print("q) Quit")
         choice = input("Select an option: ").strip().lower()
 
@@ -714,11 +894,13 @@ def main() -> None:
                 print(f"Quaternary preview failed: {exc}")
         elif choice == "4":
             handle_custom_plot(calculator, tables, args.output_dir)
+        elif choice == "5":
+            handle_equimolar_quinary(calculator, tables, element_pool, args.output_dir)
         elif choice in {"q", "quit", "exit"}:
             print("Bye.")
             break
         else:
-            print("Invalid selection. Please choose 1–4 or q.")
+            print("Invalid selection. Please choose 1–5 or q.")
 
 
 if __name__ == "__main__":

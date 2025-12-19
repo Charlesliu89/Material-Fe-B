@@ -46,7 +46,9 @@ QUATERNARY_MIN_STEP = 0.01
 
 # Data constants
 OMEGA_SHEETS = ("U0", "U1", "U2", "U3")
-DEFAULT_DATABASE_PATH = Path("Data/Element pair data base matrices.xlsx")
+DEFAULT_DATABASE_PATH = (
+    Path(__file__).resolve().parent / "Data" / "Element pair data base matrices.xlsx"
+)
 
 # Geometry: regular tetrahedron vertices (barycentric embedding)
 TETRA_VERTICES = [
