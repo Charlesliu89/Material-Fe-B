@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Batch enthalpy of mixing visualizer.
+Batch enthalpy plot generator.
 
 Splits responsibilities across:
 - enthalpy_config: constants (fonts, paths, steps)
@@ -734,7 +734,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--calculator",
         type=Path,
-        default=Path(__file__).with_name("enthalpy of mixing.py"),
+        default=Path(__file__).with_name("single_enthalpy_cli.py"),
         help="Path to the interactive calculator script.",
     )
     parser.add_argument(
