@@ -498,11 +498,11 @@ def handle_equimolar_quinary(calculator, tables, element_pool: Sequence[str], ou
         print("At least 5 elements are required in the current element pool.")
         return
 
-    prompt = "Enter 1-4 base elements separated by commas (e.g., Fe,Co) or 'b' to return: "
+    prompt = "Enter 1-5 base elements separated by commas (e.g., Fe,Co or Fe,Co,Ni,Cr,B) or 'b' to return: "
     while True:
         raw = input(prompt).strip()
         if not raw:
-            print("No elements entered. Provide 1-4 symbols or 'b' to return.")
+            print("No elements entered. Provide 1-5 symbols or 'b' to return.")
             continue
         if raw.lower() in {"b", "back", "r", "return"}:
             print("Returning to the main menu.")
@@ -514,13 +514,29 @@ def handle_equimolar_quinary(calculator, tables, element_pool: Sequence[str], ou
             if symbol not in base_elements:
                 base_elements.append(symbol)
 
-        if len(base_elements) < 1 or len(base_elements) > 4:
-            print("Please provide between 1 and 4 unique elements.")
+        if len(base_elements) < 1 or len(base_elements) > 5:
+            print("Please provide between 1 and 5 unique elements.")
             continue
 
         missing = [el for el in base_elements if el not in available_elements]
         if missing:
             print(f"Elements not in the current pool: {', '.join(missing)}.")
+            continue
+
+        if len(base_elements) == 5:
+            combo = tuple(base_elements)
+            if not combo_supported(calculator, tables, combo):
+                print("Data is incomplete for at least one pair; choose a different set.")
+                continue
+            composition = [(element, 1.0 / 5.0) for element in combo]
+            total_enthalpy, details = calculator.compute_multi_component_enthalpy(tables, composition)
+            print(f"\nEquimolar 5-component ΔH_mix for {'-'.join(combo)} = {total_enthalpy:.5f} kJ/mol")
+            if details:
+                print("Pairwise contributions (kJ/mol):")
+                for pair, (c_a, c_b), delta_h in details:
+                    print(f"{pair:<10s} ΔH = {delta_h:>10.5f} (c_A={c_a:.4f}, c_B={c_b:.4f})")
+            else:
+                print("No pairwise contributions available.")
             continue
 
         remaining_needed = 5 - len(base_elements)
