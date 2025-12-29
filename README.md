@@ -28,6 +28,12 @@ python -m pip install -r requirements.txt
 > PNG 导出依赖 Kaleido；若失败将自动回退为 HTML。  
 > PNG export uses Kaleido; falls back to HTML if PNG export fails.
 
+可选：安装测试工具 pytest。  
+Optional: install pytest for running tests.
+```bash
+python -m pip install pytest
+```
+
 ## 数据准备 / Data preparation
 - 默认读取 `Data/Element pair data base matrices.xlsx`。  
   Workbook is expected at `Data/Element pair data base matrices.xlsx`.
@@ -37,6 +43,8 @@ python -m pip install -r requirements.txt
   Ensure sheets `U0`–`U3` contain pair coefficients ordered by atomic number; update Excel when data change.
 
 ## 脚本与用法 / Scripts and usage
+建议在 `Material` 目录运行以下命令；VS Code 建议直接打开 `Material` 作为工作区，使 `.vscode/settings.json` 生效。  
+Recommended: run the commands below from `Material`. Open `Material` as the VS Code workspace so `.vscode/settings.json` applies.
 
 ### 1) `single_enthalpy_cli.py`
 交互或一次性计算 2–5 元成分。 / Interactive or one-shot calculator for 2–5 element compositions.
@@ -94,6 +102,20 @@ python fe_b_cr_phase_overlay.py \
 - `--boundary-csv`：相界 CSV，列 a/b/c 会被清洗并对齐网格。 / Boundary CSV (a/b/c columns), cleaned and snapped.
 - `--output`：PNG 路径（自动创建目录），可配合 `--show` 同时预览。 / PNG path; add `--show` for preview.
 - `--no-boundaries`：禁用相界叠加。 / Disable boundary overlay.
+
+## 测试 / Testing
+运行全部测试（在 `Material` 目录）：  
+Run all tests (from `Material`):
+```bash
+python -m pytest
+```
+或指定目录：  
+Or target the tests folder:
+```bash
+pytest tests
+```
+VS Code 测试面板会自动发现 `tests/test_*.py`；请确保解释器指向 `.venv/bin/python`。  
+VS Code discovers `tests/test_*.py` automatically; ensure the interpreter is `.venv/bin/python`.
 
 ## 提示 / Tips
 - 首次运行请核对元素列表与 Excel 完全一致，缺项通常是表头/行格式问题。  

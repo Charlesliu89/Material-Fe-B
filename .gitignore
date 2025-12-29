@@ -5,8 +5,10 @@
 __pycache__/
 *.pyc
 
-# VS Code settings (optional)
+# VS Code settings
 .vscode/
+!.vscode/
+!.vscode/settings.json
 
 # macOS metadata
 .DS_Store
