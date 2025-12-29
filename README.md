@@ -8,6 +8,8 @@ This toolkit reads Omega matrices from `Data/Element pair data base matrices.xls
   Interactive single-composition calculator with normalized fractions, pair contributions, and total ΔH<sub>mix</sub>.
 - 批处理绘图器，可批量导出二元曲线、三元等高线、四元预览/切片及等摩尔五元排名。  
   Batch plotter for binary curves, ternary contours, quaternary previews/slices, and equimolar quinary rankings.
+- 零混合焓设计：输入 2–5 种元素，通过优化搜索 ΔH_mix 接近 0 的成分组合。  
+  Zero-enthalpy design: optimize 2–5 element compositions with ΔH_mix near 0.
 - 专用 Fe-B-Cr 绘图，支持将相界对齐采样网格后叠加。  
   Dedicated Fe-B-Cr plot with optional snapped phase-boundary overlays.
 
@@ -61,6 +63,8 @@ python batch_enthalpy_plots.py
    Custom plots (2–4 elements)
 5. 等摩尔五元排名，可导出 Excel → `Data/plots/quinary`  
    Equimolar quinary ranking with optional Excel export
+6. 零混合焓成分设计（2–5 元素）  
+   Zero-enthalpy composition design (2–5 elements)
 
 常用参数 / Useful flags:
 - `--calculator PATH`：指定计算核心（默认 `single_enthalpy_cli.py`）。 / Alternate calculator module.
