@@ -530,8 +530,14 @@ def _get_worker_state():
     return _WORKER_CALCULATOR, _WORKER_TABLES
 
 
-def _binary_worker_task(combo: Sequence[str], total_units: int):
-    calculator, tables = _get_worker_state()
+def _binary_worker_task(
+    combo: Sequence[str],
+    total_units: int,
+    calculator=None,
+    tables=None,
+):
+    if calculator is None or tables is None:
+        calculator, tables = _get_worker_state()
     fractions = [i / total_units for i in range(total_units + 1)]
     enthalpies: List[float] = []
     for frac_a in fractions:
@@ -665,7 +671,7 @@ def run_batch(
 
         for combo in chunk:
             if component_count == 2:
-                fractions, enthalpies = _binary_worker_task(combo, total_units)
+                _, fractions, enthalpies = _binary_worker_task(combo, total_units, calculator, tables)
                 _save_binary_figure(combo, fractions, enthalpies, output_path / "binary")
             else:
                 assert vectors is not None
@@ -758,9 +764,19 @@ def build_custom_plot(calculator, tables, elements: Sequence[str]):
     raise ValueError("Unsupported component count.")
 
 
+def _safe_show_plotly(fig, config=None) -> None:
+    try:
+        fig.show(config=config)
+    except Exception as exc:  # pylint: disable=broad-except
+        print(
+            "Plot preview unavailable "
+            f"({exc}). Set PLOTLY_RENDERER=browser or install ipython."
+        )
+
+
 def preview_and_maybe_save(fig, default_path: Path) -> None:
     config = {"editable": True, "edits": {"annotationPosition": True}}
-    fig.show(config=config)
+    _safe_show_plotly(fig, config=config)
     save = input(f"Save figure to {default_path}? (y/n): ").strip().lower()
     if save == "y":
         write_or_html(fig, default_path)
@@ -865,7 +881,7 @@ def handle_quaternary_preview(calculator, tables, output_dir: Path) -> None:
             calculator, tables, combo, vectors, total_units
         )
         fig = build_quaternary_figure(combo, x_vals, y_vals, z_vals, enthalpies, fractions)
-        fig.show(config={"displaylogo": False, "displayModeBar": True})
+        _safe_show_plotly(fig, config={"displaylogo": False, "displayModeBar": True})
 
         while True:
             slice_raw = input(
