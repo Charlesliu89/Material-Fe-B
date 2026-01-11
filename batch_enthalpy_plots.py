@@ -22,21 +22,6 @@ from itertools import combinations
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-
-def _maybe_reexec_with_venv() -> None:
-    venv_python = Path(__file__).resolve().parent / ".venv" / "bin" / "python"
-    if not venv_python.exists():
-        return
-    if sys.prefix != sys.base_prefix:
-        return
-    if Path(sys.executable) == venv_python:
-        return
-    # Re-exec with the project venv to ensure dependencies are available.
-    os.execv(str(venv_python), [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]])
-
-
-_maybe_reexec_with_venv()
-
 import pandas as pd
 
 from enthalpy_config import (
