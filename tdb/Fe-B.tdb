@@ -1,0 +1,21 @@
+$===============================================================================
+$ Fe-B CALPHAD TDB template
+$ This template is intentionally minimal; populate via tools/build_tdb.py using
+$ explicitly sourced FUNCTION/PHASE/CONSTITUENT/PARAMETER/TYPE_DEFINITION lines.
+$===============================================================================
+
+$ Minimal, parseable Fe-B TDB for smoke tests only.
+$ Do not use for real thermodynamic work; replace with sourced parameters.
+
+ELEMENT FE BCC_A2 55.845 2 0 !
+ELEMENT B RHOMBOHEDRAL_A7 10.81 2 0 !
+ELEMENT VA VACUUM 0 0 0 !
+
+TYPE_DEFINITION % SEQ * !
+
+PHASE LIQUID % 1 1 !
+CONSTITUENT LIQUID :FE,B,VA: !
+
+PARAMETER G(LIQUID,FE;0) 298.15 0; 6000 N !
+PARAMETER G(LIQUID,B;0) 298.15 0; 6000 N !
+PARAMETER G(LIQUID,VA;0) 298.15 0; 6000 N !

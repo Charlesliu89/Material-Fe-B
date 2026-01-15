@@ -1,2 +1,3 @@
 # Optional CALPHAD stack (install separately to avoid heavy deps for base workflows)
 pycalphad>=0.11.1
+numpy>=1.24
