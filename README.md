@@ -118,6 +118,29 @@ python enthalpy_fe_b_cr_overlay.py \
 - `calphad/run_sample_equilibrium.py`：默认用 `calphad/thermo/Database/crfeni_mie.tdb` 计算 Fe-Cr（含 VA）等温平衡，打印相与变量维度。可用 `--tdb/--temp/--grid` 覆盖。
 - `calphad/run_fe_cr_plot.py`：尝试绘制 Fe-Cr 在给定温度下 BCC/FCC 的 GM 曲线并标记 T0 近似（依赖 TDB 兼容性，MatCalc 来源的库可能数值异常）。运行后输出到 `calphad/plots/fe_cr_gm.png`。
 
+### 5) Fe-B TDB 自动化管线 / Fe-B TDB pipeline (experimental)
+用于从开放文献中提取显式 TDB 行并合并到 `tdb/Fe-B.tdb`，再执行烟囱测试：
+Pipeline scripts:
+- `tools/lit_search.py`：Crossref/OpenAlex 检索并标注 OA 链接。
+- `tools/fetch_sources.py`：从 Unpaywall 下载 OA PDF（遇到登录/403 会生成队列）。
+- `tools/pdf_to_text.py`：PDF 转文本（`pdftotext -layout`）。
+- `tools/extract_tdb_lines.py`：从 `.txt`/`.tdb` 抽取显式 TDB 行（带 DOI/页码/引用）。
+- `tools/build_tdb.py`：把抽取行合并进 `tdb/Fe-B.tdb`（带证据注释块）。
+- `tools/pipeline_lit_to_tdb.py`：一键编排上述步骤。
+- `tools/net_diag.py`：网络诊断，输出 `sources/search_diag.md`。
+
+当前进度 / Status:
+- ✅ 最小可解析 TDB 与 smoke test 可跑通（仅用于流程验证，不代表真实热力学）。  
+- ⚠️ 云环境对 Crossref/OpenAlex 出站访问返回 403（见 `sources/search_diag.md`），因此自动检索会被阻塞。
+
+当前问题 / Issues:
+- 需要在本地有外网的环境运行 `tools/lit_search.py`，或提供候选列表：
+  ```bash
+  python tools/pipeline_lit_to_tdb.py --query "Fe-B thermodynamic assessment CALPHAD" --rows 10 --max-iter 3 \
+    --candidates sources/manual_candidates.json
+  ```
+- 若遇到登录/付费资源，脚本会写 `sources/download_queue.md`，需要人工下载到对应目录后再继续。
+
 ## 测试 / Testing
 运行全部测试（在 `Material` 目录）：  
 Run all tests (from `Material`):
