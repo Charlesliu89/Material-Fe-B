@@ -20,7 +20,7 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import combinations
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -515,10 +515,10 @@ def handle_zero_enthalpy_design(calculator, tables) -> None:
 # --------------------------------------------------------------------------- #
 
 _WORKER_CALCULATOR = None
-_WORKER_TABLES: Dict[str, object] | None = None
+_WORKER_TABLES: Mapping[str, pd.DataFrame] | None = None
 
 
-def _parallel_initializer(calculator_path: str, tables: Dict[str, object]) -> None:
+def _parallel_initializer(calculator_path: str, tables: Mapping[str, pd.DataFrame]) -> None:
     global _WORKER_CALCULATOR, _WORKER_TABLES
     _WORKER_CALCULATOR = load_calculator_module(Path(calculator_path))
     _WORKER_TABLES = tables
@@ -645,7 +645,7 @@ def run_batch(
             calculator_path = getattr(calculator, "__file__", None)
             if not calculator_path:
                 raise RuntimeError("Calculator module path is required for parallel execution.")
-            init_args = (str(calculator_path), tables)
+            init_args: Tuple[str, Mapping[str, pd.DataFrame]] = (str(calculator_path), tables)
             with ProcessPoolExecutor(
                 max_workers=min(worker_count, len(chunk)),
                 initializer=_parallel_initializer,
@@ -1191,7 +1191,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--calculator",
         type=Path,
-        default=Path(__file__).with_name("single_enthalpy_cli.py"),
+        default=Path(__file__).with_name("enthalpy_single_cli.py"),
         help="Path to the interactive calculator script.",
     )
     parser.add_argument(

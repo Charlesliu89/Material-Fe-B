@@ -6,7 +6,7 @@ import re
 import sys
 from itertools import combinations
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple, cast
 
 import pandas as pd
 
@@ -149,16 +149,18 @@ def lookup_omegas(
     for sheet in OMEGA_SHEETS:
         df = tables[sheet]
         try:
-            value = df.at[from_ordered, to_ordered]
+            value_raw = df.at[from_ordered, to_ordered]
         except KeyError as exc:
             raise KeyError(
                 f"Pair {from_ordered}-{to_ordered} is missing from sheet {sheet}."
             ) from exc
-        if pd.isna(value):
+        if pd.isna(value_raw):
             raise KeyError(
                 f"Pair {from_ordered}-{to_ordered} has no value on sheet {sheet}."
             )
-        omegas.append(float(value))
+        # Cast to a real-number convertible type for type checkers; Excel cells are numeric.
+        value = float(cast(float | int | str, value_raw))
+        omegas.append(value)
     return omegas, (from_ordered, to_ordered)
 
 

@@ -22,3 +22,7 @@ Data/
 *.jpg
 *.jpeg
 *.svg
+
+# CALPHAD data (local only)
+calphad/thermo/
+!calphad/thermo/.gitkeep

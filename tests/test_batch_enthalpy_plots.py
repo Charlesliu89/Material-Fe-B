@@ -9,7 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
-    import batch_enthalpy_plots as bep
+    import enthalpy_batch_cli as bep
     from enthalpy_plot import build_binary_figure
 except Exception as exc:  # pragma: no cover - skip if optional deps are missing
     bep = None

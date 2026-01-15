@@ -28,6 +28,15 @@ python -m pip install -r requirements.txt
 > PNG 导出依赖 Kaleido；若失败将自动回退为 HTML。  
 > PNG export uses Kaleido; falls back to HTML if PNG export fails.
 
+可选：CALPHAD 依赖（建议单独安装）：  
+Optional CALPHAD deps (separate install):
+```bash
+python -m pip install -r requirements-calphad.txt
+```
+
+CALPHAD 数据（需自备 TDB，默认路径）：  
+Provide your TDB files under `calphad/thermo/Database/` (not tracked by git), e.g. `calphad/thermo/Database/COST507.tdb`. Handbook/说明可放 `calphad/thermo/Handbook/`. Additional example: `calphad/thermo/Database/crfeni_mie.tdb` (Fe-Cr-Ni demo; MatCalc-sourced files may still need cleanup to be fully pycalphad-compatible).
+
 可选：安装测试工具 pytest。  
 Optional: install pytest for running tests.
 ```bash
@@ -41,15 +50,17 @@ python -m pip install pytest
   Data files and generated images are kept locally (not tracked in git).
 - 确认工作表 `U0`、`U1`、`U2`、`U3` 已按原子序填充配对系数；如有更新，请同步 Excel。  
   Ensure sheets `U0`–`U3` contain pair coefficients ordered by atomic number; update Excel when data change.
+- 如果使用 CALPHAD，请将 TDB 数据库放在 `calphad/thermo/Database/`（不跟踪），并在 `calphad/calphad_core.py` 或运行脚本时用 `--tdb` 指定。  
+  For CALPHAD workflows, place TDB files under `calphad/thermo/Database/` (not tracked) and configure paths in `calphad/calphad_core.py` or via `--tdb`.
 
 ## 脚本与用法 / Scripts and usage
 建议在 `Material` 目录运行以下命令；VS Code 建议直接打开 `Material` 作为工作区，使 `.vscode/settings.json` 生效。  
 Recommended: run the commands below from `Material`. Open `Material` as the VS Code workspace so `.vscode/settings.json` applies.
 
-### 1) `single_enthalpy_cli.py`
+### 1) `enthalpy_single_cli.py`
 交互或一次性计算 2–5 元成分。 / Interactive or one-shot calculator for 2–5 element compositions.
 ```bash
-python single_enthalpy_cli.py [--excel PATH] [--line "Fe 20 Al 80"] [--list-elements]
+python enthalpy_single_cli.py [--excel PATH] [--line "Fe 20 Al 80"] [--list-elements]
 ```
 - `--excel PATH`：自定义 Omega 工作簿。 / Override workbook.
 - `--line`：提供单行成分，自动归一化后计算。 / One-shot composition line.
@@ -57,10 +68,10 @@ python single_enthalpy_cli.py [--excel PATH] [--line "Fe 20 Al 80"] [--list-elem
 未加 `--line` 时进入 REPL，可输入 `Fe 20 Al 30 Ni 50` 或 `Fe=20,Al=30,Ni=50`。  
 Without `--line`, enter REPL; examples: `Fe 20 Al 30 Ni 50`, `Fe=20,Al=30,Ni=50`.
 
-### 2) `batch_enthalpy_plots.py`
+### 2) `enthalpy_batch_cli.py`
 批量绘图；无参数运行进入菜单。 / Batch plot generator; run without args for menu.
 ```bash
-python batch_enthalpy_plots.py
+python enthalpy_batch_cli.py
 ```
 菜单 / Menu:
 1. 二元曲线 → `Data/plots/binary`  
@@ -77,7 +88,7 @@ python batch_enthalpy_plots.py
    Zero-enthalpy composition design (2–5 elements)
 
 常用参数 / Useful flags:
-- `--calculator PATH`：指定计算核心（默认 `single_enthalpy_cli.py`）。 / Alternate calculator module.
+- `--calculator PATH`：指定计算核心（默认 `enthalpy_single_cli.py`）。 / Alternate calculator module.
 - `--excel-db PATH`：显式指定工作簿。 / Explicit workbook path.
 - `--elements Fe B Ni ...`：限制元素池。 / Restrict element pool.
 - `--output-dir Data/plots`：修改输出根目录，子目录自动创建。 / Change output root.
@@ -88,10 +99,10 @@ python batch_enthalpy_plots.py
 Kaleido 导出失败时会自动保存 `.html` 交互文件。  
 If Kaleido PNG export fails, `.html` fallbacks are saved.
 
-### 3) `fe_b_cr_phase_overlay.py`
+### 3) `enthalpy_fe_b_cr_overlay.py`
 生成 Fe-B-Cr 三元图，可选对齐网格的相界叠加。 / Fe-B-Cr ternary plot with optional snapped phase boundaries.
 ```bash
-python fe_b_cr_phase_overlay.py \
+python enthalpy_fe_b_cr_overlay.py \
     [--excel Data/Element pair data base matrices.xlsx] \
     [--step 0.001] \
     [--boundary-csv Data/FeBCr phase diagram line.csv] \
@@ -102,6 +113,10 @@ python fe_b_cr_phase_overlay.py \
 - `--boundary-csv`：相界 CSV，列 a/b/c 会被清洗并对齐网格。 / Boundary CSV (a/b/c columns), cleaned and snapped.
 - `--output`：PNG 路径（自动创建目录），可配合 `--show` 同时预览。 / PNG path; add `--show` for preview.
 - `--no-boundaries`：禁用相界叠加。 / Disable boundary overlay.
+
+### 4) CALPHAD 示例 / CALPHAD examples (optional)
+- `calphad/run_sample_equilibrium.py`：默认用 `calphad/thermo/Database/crfeni_mie.tdb` 计算 Fe-Cr（含 VA）等温平衡，打印相与变量维度。可用 `--tdb/--temp/--grid` 覆盖。
+- `calphad/run_fe_cr_plot.py`：尝试绘制 Fe-Cr 在给定温度下 BCC/FCC 的 GM 曲线并标记 T0 近似（依赖 TDB 兼容性，MatCalc 来源的库可能数值异常）。运行后输出到 `calphad/plots/fe_cr_gm.png`。
 
 ## 测试 / Testing
 运行全部测试（在 `Material` 目录）：  
