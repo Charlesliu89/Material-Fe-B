@@ -2,7 +2,8 @@
 .venv/
 
 # Byte-compiled / cache
-__pycache__/
+**/__pycache__/*
+!**/__pycache__/.gitkeep
 *.pyc
 
 # VS Code settings
@@ -15,7 +16,10 @@ __pycache__/
 Data/.DS_Store
 
 # Local data and generated assets (keep local, don't sync)
-Data/
+Data/**
+!Data/**/
+!Data/.gitkeep
+!Data/**/.gitkeep
 *.xlsx
 *.csv
 *.png
@@ -23,6 +27,5 @@ Data/
 *.jpeg
 *.svg
 
-# CALPHAD data (local only)
-calphad/thermo/
-!calphad/thermo/.gitkeep
+# CALPHAD data
+# 默认允许 calphad/thermo/ 下文件提交，如需忽略请在子目录自定义 .gitignore
