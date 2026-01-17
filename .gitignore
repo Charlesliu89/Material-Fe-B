@@ -1,5 +1,6 @@
-# Python virtual environment
+# Python virtual environments (.venv/ at repo root or subfolders, e.g. ./calphad/.venv/)
 .venv/
+**/.venv/
 
 # Byte-compiled / cache
 **/__pycache__/*
@@ -29,3 +30,7 @@ Data/**
 
 # CALPHAD data
 # 默认允许 calphad/thermo/ 下文件提交，如需忽略请在子目录自定义 .gitignore
+
+# Local environment variables
+# Root-level .env (secrets, API keys)
+.env
