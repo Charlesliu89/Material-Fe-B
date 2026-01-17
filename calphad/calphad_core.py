@@ -11,7 +11,7 @@ This is a scaffold; fill in with actual calculations (equilibrium, property grid
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, Sequence, cast
+from typing import Any, Sequence, cast
 
 import xarray as xr
 

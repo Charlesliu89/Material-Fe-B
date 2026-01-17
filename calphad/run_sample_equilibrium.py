@@ -9,16 +9,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-
-# Ensure project root on sys.path when run directly
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from calphad.calphad_core import load_database, simple_equilibrium
+from calphad.tasks import run_sample_equilibrium  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,11 +44,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    db = load_database(args.tdb)
-    # Fe-Cr system (include VA)
-    components = ["FE", "CR", "VA"]
-    result = simple_equilibrium(db, components, phases=None, temperature=args.temp, grid_points=args.grid)
+    result = run_sample_equilibrium(
+        tdb_path=str(args.tdb),
+        temperature=args.temp,
+        grid=args.grid,
+    )
 
+    components = ["FE", "CR", "VA"]
     phases = sorted({str(ph) for ph in result.Phase.values.ravel()})
     print(f"Components: {components}")
     print(f"Phases ({len(phases)}): {phases[:10]}{' ...' if len(phases) > 10 else ''}")
