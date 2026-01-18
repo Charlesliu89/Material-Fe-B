@@ -1,2 +1,2 @@
 # CALPHAD utilities package (optional).
-# Install dependencies from requirements-calphad.txt before importing.
+# Install dependencies from requirements.txt before importing.

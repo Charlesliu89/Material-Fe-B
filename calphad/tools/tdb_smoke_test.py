@@ -26,7 +26,7 @@ def main() -> int:
         _print_error(
             "pycalphad import failed",
             str(exc),
-            ["install pycalphad (see requirements-calphad.txt)"],
+            ["install pycalphad (see requirements.txt)"],
         )
         return 2
 
