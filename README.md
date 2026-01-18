@@ -43,6 +43,14 @@ Optional: install pytest for running tests.
 python -m pip install pytest
 ```
 
+## 项目备注 / Project notes
+- 旧的 `env_check.txt` 环境备注已移除，以避免混淆；请以本节说明为准。  
+  The outdated `env_check.txt` note has been removed to avoid confusion; refer to this section instead.
+- `calphad/tools/vector_store_diag.py` 会强制使用官方 OpenAI API Base URL，并在输出中同时显示环境变量值与实际使用值。  
+  The vector store diagnostic forces the official OpenAI API base URL and prints both the env value and the effective value.
+- 若缺少依赖，诊断脚本会记录在仓库根目录 `.missing_deps.txt`，下次运行会尝试自动安装；如需清理记录，删除该文件即可。  
+  Missing deps are cached in `.missing_deps.txt` and auto-installed on the next run; delete the file to reset.
+
 ## 数据准备 / Data preparation
 - 默认读取 `Data/Element pair data base matrices.xlsx`。  
   Workbook is expected at `Data/Element pair data base matrices.xlsx`.
