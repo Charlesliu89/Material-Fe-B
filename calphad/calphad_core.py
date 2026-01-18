@@ -2,7 +2,7 @@
 CALPHAD helpers (optional).
 
 Requirements:
-- Install optional deps: pip install -r requirements-calphad.txt
+- Install deps: pip install -r requirements.txt
 - Provide a TDB file under calphad/thermo/Database/ (not tracked).
 
 This is a scaffold; fill in with actual calculations (equilibrium, property grids, etc.).
@@ -20,8 +20,8 @@ try:
     from pycalphad import Database, equilibrium, variables as v  # type: ignore
 except Exception as exc:  # pragma: no cover - optional dependency
     raise ImportError(
-        "pycalphad is not installed. Install optional requirements: "
-        "pip install -r requirements-calphad.txt"
+        "pycalphad is not installed. Install requirements: "
+        "pip install -r requirements.txt"
     ) from exc
 
 

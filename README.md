@@ -25,14 +25,10 @@ This toolkit reads Omega matrices from `Data/Element pair data base matrices.xls
 ```bash
 python -m pip install -r requirements.txt
 ```
+> requirements.txt 已包含 CALPHAD、OpenAI 向量库等可选模块依赖；默认安装即可覆盖全部功能。  
+> requirements.txt includes CALPHAD/OpenAI vector store deps; a single install covers all features.
 > PNG 导出依赖 Kaleido；若失败将自动回退为 HTML。  
 > PNG export uses Kaleido; falls back to HTML if PNG export fails.
-
-可选：CALPHAD 依赖（建议单独安装）：  
-Optional CALPHAD deps (separate install):
-```bash
-python -m pip install -r requirements-calphad.txt
-```
 
 CALPHAD 数据（需自备 TDB，默认路径）：  
 Provide your TDB files under `calphad/thermo/Database/` (not tracked by git), e.g. `calphad/thermo/Database/COST507.tdb`. Handbook/说明可放 `calphad/thermo/Handbook/`. Additional example: `calphad/thermo/Database/crfeni_mie.tdb` (Fe-Cr-Ni demo; MatCalc-sourced files may still need cleanup to be fully pycalphad-compatible).

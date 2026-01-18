@@ -3,7 +3,7 @@
 Place PDFs related to CALPHAD references and supporting documents here. Create subfolders (e.g. `systems/`, `methods/`, `reviews/`) if you want to keep items organized.
 
 ## 构建 OpenAI 向量库
-- 安装依赖：`pip install 'openai>=1.6.0'`
+- 安装依赖：`pip install -r requirements.txt`
 - 运行：`python calphad/tools/vector_store_builder.py`（默认读取本目录下的全部 PDF 并创建/上传向量库）
   - 已有向量库时用 `--vector-store-id <id>` 复用同一个库
   - 仅查看将上传的文件用 `--dry-run`

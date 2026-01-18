@@ -14,7 +14,7 @@ try:
     from pycalphad import calculate  # type: ignore
 except Exception as exc:  # pragma: no cover
     raise ImportError(
-        "pycalphad is required. Install optional deps: pip install -r requirements-calphad.txt"
+        "pycalphad is required. Install deps: pip install -r requirements.txt"
     ) from exc
 
 
