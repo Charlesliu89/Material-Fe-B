@@ -1,6 +1,6 @@
 # Environment variables captured from the current shell
 OPENAI_API_KEY=***redacted***
-OPENAI_BASE_URL=https://api.openai.com:18080/
+OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_VECTOR_STORE_ID=vs_696ceb6819a8819180b336f07c94b635
 CODEX_ENV_PYTHON_VERSION=3.12
 CODEX_ENV_NODE_VERSION=20
