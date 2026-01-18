@@ -1,0 +1,11 @@
+# Environment variables captured from the current shell
+OPENAI_API_KEY=***redacted***
+OPENAI_BASE_URL=https://api.openai.com:18080/
+OPENAI_VECTOR_STORE_ID=vs_696ceb6819a8819180b336f07c94b635
+CODEX_ENV_PYTHON_VERSION=3.12
+CODEX_ENV_NODE_VERSION=20
+CODEX_ENV_JAVA_VERSION=21
+CODEX_ENV_GO_VERSION=1.24.3
+HTTP_PROXY=http://proxy:8080
+HTTPS_PROXY=http://proxy:8080
+NO_PROXY=browser
