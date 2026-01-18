@@ -117,8 +117,9 @@ python enthalpy_fe_b_cr_overlay.py \
 - `--no-boundaries`：禁用相界叠加。 / Disable boundary overlay.
 
 ### 4) CALPHAD 示例 / CALPHAD examples (optional)
-- `calphad/run_sample_equilibrium.py`：默认用 `calphad/thermo/Database/crfeni_mie.tdb` 计算 Fe-Cr（含 VA）等温平衡，打印相与变量维度。可用 `--tdb/--temp/--grid` 覆盖。
-- `calphad/run_fe_cr_plot.py`：尝试绘制 Fe-Cr 在给定温度下 BCC/FCC 的 GM 曲线并标记 T0 近似（依赖 TDB 兼容性，MatCalc 来源的库可能数值异常）。运行后输出到 `calphad/plots/fe_cr_gm.png`。
+- `calphad/run_demo.py equilibrium`：默认用 `calphad/thermo/Database/crfeni_mie.tdb` 计算 Fe-Cr（含 VA）等温平衡，打印相与变量维度。可用 `--tdb/--temp/--grid` 覆盖。
+- `calphad/run_demo.py fe-cr-gm`：尝试绘制 Fe-Cr 在给定温度下 BCC/FCC 的 GM 曲线并标记 T0 近似（依赖 TDB 兼容性，MatCalc 来源的库可能数值异常）。运行后输出到 `calphad/plots/fe_cr_gm.png`。
+- `calphad/run_demo.py fe-b-t0`：计算 Fe-B 体系 BCC/FCC 的 T0 交点表格，可用 `--tdb/--tmin/--tmax/--tstep/--grid` 覆盖。
 - `calphad/tdb_builder.py`：TDB 构建与校验工具，支持 `full_pipeline`/`extract_only`/`validate_only` 三模式。默认将拼接/复制结果写入 `calphad/thermo/Database/built_output.tdb`，可选用 `--fragments` 拼接片段、`--source` 复制已有 TDB、`--skip-validation` 跳过校验、`--human` 输出友好文本。
 - `calphad/tdb_pipeline.py`：更完整的流水线版，含持久化状态、自动循环到 `tdb_smoke_test` 通过为止。支持 CrossRef 检索、PDF 抽取 TDB 行、合并片段与新行、pycalphad 冒烟测试。示例：
   - `python3 calphad/tdb_pipeline.py --mode full_pipeline --message \"Fe-B 建 TDB 并验证可用\" --human`

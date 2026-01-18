@@ -213,7 +213,7 @@ def tdb_merge(
     else:
         base_text = "! Empty base.\n"
 
-    seen = set(line.strip() for line in base_text.splitlines())
+    seen = {line.strip() for line in base_text.splitlines() if line.strip()}
     lines: List[str] = base_text.splitlines()
 
     for frag in fragments:
@@ -222,13 +222,20 @@ def tdb_merge(
             continue
         frag_text = frag_path.read_text(encoding="utf-8")
         lines.append(f"! --- begin fragment {frag_path.name} ---")
-        lines.extend(frag_text.splitlines())
+        for line in frag_text.splitlines():
+            stripped = line.strip()
+            if stripped and stripped in seen:
+                continue
+            if stripped:
+                seen.add(stripped)
+            lines.append(line)
         lines.append(f"! --- end fragment {frag_path.name} ---")
 
     for param in new_params:
-        if param.line.strip() in seen:
+        stripped = param.line.strip()
+        if not stripped or stripped in seen:
             continue
-        seen.add(param.line.strip())
+        seen.add(stripped)
         if param.evidence:
             lines.append(f"! source={param.doi_or_url or 'unknown'} page={param.page or '-'} evidence={param.evidence}")
         lines.append(param.line)
@@ -334,6 +341,7 @@ def infer_missing_from_error(error: str) -> List[str]:
 def run_full_pipeline(cfg: WorkflowConfig, state: WorkflowState) -> SmokeTestResult:
     hints = list(state.missing_hints)
     result = SmokeTestResult(passed=False, error="not_started", missing_hints=hints)
+    extracted_seen = {line.strip() for line in state.extracted_params if line.strip()}
     for iteration in range(cfg.max_iters):
         print(f"[full_pipeline] iteration {iteration + 1}/{cfg.max_iters}")
         # 检索
@@ -371,8 +379,17 @@ def run_full_pipeline(cfg: WorkflowConfig, state: WorkflowState) -> SmokeTestRes
         for line in cfg.new_lines:
             extracted_params.append(ExtractedParam(line=line.strip(), doi_or_url="manual", page=None, evidence=line.strip()[:100]))
 
-        merged_tdb = tdb_merge(cfg.base_tdb, extracted_params, cfg.fragments, cfg.output_tdb)
-        state.extracted_params.extend([p.line for p in extracted_params])
+        deduped_params: List[ExtractedParam] = []
+        for param in extracted_params:
+            stripped = param.line.strip()
+            if not stripped or stripped in extracted_seen:
+                continue
+            extracted_seen.add(stripped)
+            deduped_params.append(param)
+
+        base_tdb = cfg.output_tdb if cfg.output_tdb.exists() else cfg.base_tdb
+        merged_tdb = tdb_merge(base_tdb, deduped_params, cfg.fragments, cfg.output_tdb)
+        state.extracted_params.extend([p.line for p in deduped_params])
         state.tdb_version += 1
         lint_hints = tdb_lint(merged_tdb)
 
@@ -393,10 +410,21 @@ def run_full_pipeline(cfg: WorkflowConfig, state: WorkflowState) -> SmokeTestRes
 
 def run_extract_only(cfg: WorkflowConfig, state: WorkflowState) -> SmokeTestResult:
     extracted_params: List[ExtractedParam] = []
+    extracted_seen = {line.strip() for line in state.extracted_params if line.strip()}
     for line in cfg.new_lines:
         extracted_params.append(ExtractedParam(line=line.strip(), doi_or_url="manual", page=None, evidence=line.strip()[:100]))
-    merged_tdb = tdb_merge(cfg.base_tdb, extracted_params, cfg.fragments, cfg.output_tdb)
-    state.extracted_params.extend([p.line for p in extracted_params])
+
+    deduped_params: List[ExtractedParam] = []
+    for param in extracted_params:
+        stripped = param.line.strip()
+        if not stripped or stripped in extracted_seen:
+            continue
+        extracted_seen.add(stripped)
+        deduped_params.append(param)
+
+    base_tdb = cfg.output_tdb if cfg.output_tdb.exists() else cfg.base_tdb
+    merged_tdb = tdb_merge(base_tdb, deduped_params, cfg.fragments, cfg.output_tdb)
+    state.extracted_params.extend([p.line for p in deduped_params])
     state.tdb_version += 1
     return SmokeTestResult(passed=True, error=None, missing_hints=tdb_lint(merged_tdb))
 
